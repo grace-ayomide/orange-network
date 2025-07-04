@@ -99,3 +99,114 @@
     lifetime-batch-count: uint, ;; Total batches processed
   }
 )
+
+;; Comprehensive User Analytics System
+;; Engagement tracking and platform usage metrics
+(define-map UserEngagementMetrics
+  principal
+  {
+    last-activity-timestamp: uint, ;; Most recent platform interaction
+    total-login-sessions: uint, ;; Cumulative login count
+    lifetime-action-count: uint, ;; Total actions performed
+    most-recent-action-time: uint, ;; Timestamp of last action
+  }
+)
+
+;; Social Graph Relationship Management
+;; Bidirectional connection tracking system
+(define-map SocialConnections
+  {
+    first-party: principal, ;; First user in relationship
+    second-party: principal, ;; Second user in relationship
+  }
+  { connection-status: uint }
+)
+
+;; User Blocking and Access Control
+;; Harassment prevention and user protection system
+(define-map AccessControlList
+  {
+    blocking-user: principal, ;; User initiating block
+    blocked-user: principal, ;; User being blocked
+  }
+  { block-timestamp: uint }
+)
+
+;; CORE UTILITY FUNCTIONS & HELPER METHODS
+
+;; Advanced Rate Limiting Validation Engine
+;; Comprehensive action limit checking with automatic reset cycles
+(define-private (validate-rate-limits
+    (user principal)
+    (action-category uint)
+  )
+  (let (
+      (rate-data (default-to {
+        total-daily-actions: u0,
+        friend-requests-sent: u0,
+        profile-modifications: u0,
+        counter-reset-timestamp: stacks-block-height,
+      }
+        (map-get? ActionRateLimits user)
+      ))
+      (current-block-time stacks-block-height)
+      (time-since-reset (- current-block-time (get counter-reset-timestamp rate-data)))
+      (reset-required (> time-since-reset RATE_LIMIT_RESET_INTERVAL))
+    )
+    (if reset-required
+      ;; Perform automatic rate limit reset after period expiration
+      (begin
+        (map-set ActionRateLimits user {
+          total-daily-actions: u1,
+          friend-requests-sent: (if (is-eq action-category u1)
+            u1
+            u0
+          ),
+          profile-modifications: (if (is-eq action-category u2)
+            u1
+            u0
+          ),
+          counter-reset-timestamp: current-block-time,
+        })
+        true
+      )
+      ;; Validate against current rate limits
+      (and
+        (< (get total-daily-actions rate-data) MAX_DAILY_ACTIONS)
+        (or
+          (not (is-eq action-category u1))
+          (< (get friend-requests-sent rate-data) MAX_DAILY_FRIEND_REQUESTS)
+        )
+        (or
+          (not (is-eq action-category u2))
+          (< (get profile-modifications rate-data) MAX_DAILY_PROFILE_UPDATES)
+        )
+      )
+    )
+  )
+)
+
+;; Rate Limit Counter Increment System
+;; Updates appropriate counters following successful action execution
+(define-private (increment-rate-limit-counters
+    (user principal)
+    (action-category uint)
+  )
+  (let ((current-rate-data (unwrap-panic (map-get? ActionRateLimits user))))
+    (map-set ActionRateLimits user
+      (merge current-rate-data {
+        total-daily-actions: (+ (get total-daily-actions current-rate-data) u1),
+        friend-requests-sent: (+ (get friend-requests-sent current-rate-data)
+          (if (is-eq action-category u1)
+            u1
+            u0
+          )),
+        profile-modifications: (+ (get profile-modifications current-rate-data)
+          (if (is-eq action-category u2)
+            u1
+            u0
+          )),
+      })
+    )
+  )
+)
