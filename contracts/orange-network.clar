@@ -437,3 +437,59 @@
     (ok true)
   )
 )
+
+;; Dynamic Batch Size Configuration Interface
+;; User-controlled batch processing optimization
+(define-public (configure-batch-processing-size (desired-batch-size uint))
+  (let (
+      (requesting-user tx-sender)
+      (current-batch-configuration (unwrap-panic (map-get? BatchProcessingData requesting-user)))
+    )
+    (asserts! (validate-active-account requesting-user) ERR_ACCOUNT_DEACTIVATED)
+    (asserts!
+      (and (>= desired-batch-size MINIMUM_BATCH_SIZE) (<= desired-batch-size MAXIMUM_BATCH_SIZE))
+      ERR_INVALID_PARAMETERS
+    )
+    (map-set BatchProcessingData requesting-user
+      (merge current-batch-configuration { current-batch-size: desired-batch-size })
+    )
+    (print {
+      event: "batch-processing-optimized",
+      user: requesting-user,
+      previous-batch-size: (get current-batch-size current-batch-configuration),
+      new-batch-size: desired-batch-size,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
+
+;; Secure User Session Management System
+;; Advanced login tracking and session analytics
+(define-public (record-secure-user-session)
+  (let (
+      (requesting-user tx-sender)
+      (current-engagement-metrics (default-to {
+        last-activity-timestamp: stacks-block-height,
+        total-login-sessions: u0,
+        lifetime-action-count: u0,
+        most-recent-action-time: stacks-block-height,
+      }
+        (map-get? UserEngagementMetrics requesting-user)
+      ))
+    )
+    (map-set UserEngagementMetrics requesting-user
+      (merge current-engagement-metrics {
+        last-activity-timestamp: stacks-block-height,
+        total-login-sessions: (+ (get total-login-sessions current-engagement-metrics) u1),
+      })
+    )
+    (print {
+      event: "secure-session-established",
+      user: requesting-user,
+      session-number: (+ (get total-login-sessions current-engagement-metrics) u1),
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
